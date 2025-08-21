@@ -9,10 +9,6 @@ OUTPUT_DIR = "gpx_downloads"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# headers = {
-#     "User-Agent": "Mozilla/5.0 (compatible; GPX-Scraper/1.0)"
-# }
-
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) "
