@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive GPX Cycling Route Editor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            overflow-x: hidden;
+        }
+        
+        .main-container {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            min-height: 100vh;
+        }
+        
+        #map { 
+            height: calc(100vh - 80px); 
+            width: 100%; 
+            border-radius: 15px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .sidebar { 
+            height: calc(100vh - 80px); 
+            overflow-y: auto; 
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem; 
+            border-radius: 15px;
+            margin-right: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .route-item {
+            background: white;
+            border: none;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .route-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            background: #f8f9ff;
+        }
+        
+        .route-item.active {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        .navbar { 
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            border-radius: 0 0 15px 15px;
+            margin-bottom: 20px;
+        }
+        
+        .navbar-brand {
+            color: #333 !important;
+            font-weight: 700;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(45deg, #56ab2f, #a8e6cf);
+            border: none;
+            border-radius: 10px;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            border: none;
+            border-radius: 10px;
+        }
+        
+        .waypoint-marker {
+            background: #667eea;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+        
+        .route-controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .stats-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .leaflet-routing-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+        }
+        
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <nav class="navbar navbar-expand-lg">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">🚴‍♂️ GPX Cycling Route Editor</a>
+                <div id="editor-controls" class="d-flex" style="display: none !important;">
+                    <button id="saveChangesBtn" class="btn btn-success me-2">💾 Save Changes</button>
+                    <button id="cancelEditBtn" class="btn btn-secondary me-2">❌ Cancel</button>
+                    <button id="addWaypointBtn" class="btn btn-primary me-2">📍 Add Waypoint</button>
+                    <button id="optimizeRouteBtn" class="btn btn-info">⚡ Optimize Route</button>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="container-fluid px-3">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="sidebar">
+                        <div class="route-controls">
+                            <div class="d-grid gap-2 mb-3">
+                                <button class="btn btn-primary" id="addNewRouteBtn">➕ Create New Route</button>
+                                <button class="btn btn-outline-secondary" id="importGpxBtn">📁 Import GPX</button>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card" id="routeStats" style="display: none;">
+                            <h6>📊 Route Statistics</h6>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <small class="text-muted">Distance</small>
+                                    <div id="routeDistance" class="fw-bold">0 km</div>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Waypoints</small>
+                                    <div id="waypointCount" class="fw-bold">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h5 class="mb-3">🗺️ Your Routes</h5>
+                        <div id="routes-list">
+                            <div class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <div class="mt-2 text-muted">Loading routes...</div>
+                            </div>
+                        </div>
+                        
+                        <div id="waypoints-list" class="mt-4" style="display: none;">
+                            <h6>📍 Waypoints</h6>
+                            <div id="waypoints-container"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Save New Route Modal -->
+    <div class="modal fade" id="saveRouteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">💾 Save New Cycling Route</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="routeNameInput" class="form-label">Route Name</label>
+                        <input type="text" class="form-control" id="routeNameInput" placeholder="e.g., Richmond Park Loop">
+                    </div>
+                    <div class="mb-3">
+                        <label for="routeTypeSelect" class="form-label">Route Type</label>
+                        <select class="form-select" id="routeTypeSelect">
+                            <option value="cycling">🚴‍♂️ Cycling</option>
+                            <option value="walking">🚶‍♂️ Walking</option>
+                            <option value="driving">🚗 Driving</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmSaveRouteBtn">Save Route</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Import GPX Modal -->
+    <div class="modal fade" id="importGpxModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📁 Import GPX File</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="gpxFileInput" class="form-label">Select GPX File</label>
+                        <input type="file" class="form-control" id="gpxFileInput" accept=".gpx">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmImportBtn">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- Global State & Config ---
+        const map = L.map('map').setView([51.505, -0.09], 13);
+        
+        // Add multiple tile layers
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        });
+        
+        const cyclOSMLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+            maxZoom: 20,
+            attribution: '© OpenStreetMap contributors, © CyclOSM'
+        });
+        
+        // Add cycling-friendly layer by default
+        cyclOSMLayer.addTo(map);
+        
+        // Layer control
+        const baseMaps = {
+            "🚴‍♂️ Cycling Map": cyclOSMLayer,
+            "🗺️ Standard Map": osmLayer
+        };
+        L.control.layers(baseMaps).addTo(map);
+        
+        let allRoutesData = [];
+        let currentRoute = null;
+        let routingControl = null;
+        let waypointMarkers = [];
+        let saveRouteModal, importGpxModal;
+        let isAddingWaypoints = false;
+        
+        // Mock data for demonstration
+        const mockRoutes = [
+            {
+                file: "cobham_tooting_loop.gpx",
+                name: "Cobham to Tooting Loop",
+                tracks: [[[51.3236, -0.4142], [51.3856, -0.2672], [51.4236, -0.1889], [51.4321, -0.1278]]],
+                waypoints: [[51.3236, -0.4142, "Start: Cobham"], [51.3856, -0.2672, "Waypoint 1"], [51.4236, -0.1889, "Waypoint 2"], [51.4321, -0.1278, "End: Tooting"]]
+            },
+            {
+                file: "richmond_park.gpx",
+                name: "Richmond Park Circuit",
+                tracks: [[[51.4254, -0.2637], [51.4354, -0.2537], [51.4454, -0.2437], [51.4254, -0.2637]]],
+                waypoints: [[51.4254, -0.2637, "Richmond Gate"], [51.4354, -0.2537, "Pembroke Lodge"], [51.4454, -0.2437, "Isabella Plantation"], [51.4254, -0.2637, "Return"]]
+            }
+        ];
+        
+        // --- Core Functions ---
+        document.addEventListener('DOMContentLoaded', () => {
+            saveRouteModal = new bootstrap.Modal(document.getElementById('saveRouteModal'));
+            importGpxModal = new bootstrap.Modal(document.getElementById('importGpxModal'));
+            initializeRoutes();
+            setupEventListeners();
+            
+            // Try to load the Cobham route by default
+            setTimeout(() => {
+                const cobhamRoute = mockRoutes.find(r => r.file === "cobham_tooting_loop.gpx");
+                if (cobhamRoute) {
+                    loadRoute(cobhamRoute);
+                }
+            }, 1000);
+        });
+        
+        function initializeRoutes() {
+            // Use mock data instead of API call for demonstration
+            allRoutesData = mockRoutes;
+            renderRouteList();
+            displayAllRoutesOverview();
+        }
+        
+        function renderRouteList() {
+            const list = document.getElementById('routes-list');
+            list.innerHTML = '';
+            
+            if (allRoutesData.length === 0) {
+                list.innerHTML = '<div class="text-muted text-center p-3">No routes found.</div>';
+                return;
+            }
+            
+            allRoutesData.forEach((route, index) => {
+                const item = document.createElement('a');
+                item.href = '#';
+                item.className = 'route-item d-block text-decoration-none';
+                item.dataset.file = route.file;
+                
+                const icon = route.file.includes('park') ? '🏞️' : '🚴‍♂️';
+                item.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="me-2">${icon}</span>
+                            <strong>${route.name}</strong>
+                        </div>
+                        <small class="text-muted">${route.waypoints.length} pts</small>
+                    </div>
+                `;
+                
+                item.onclick = (e) => {
+                    e.preventDefault();
+                    setActiveRoute(item);
+                    loadRoute(route);
+                };
+                
+                list.appendChild(item);
+            });
+        }
+        
+        function displayAllRoutesOverview() {
+            clearMap();
+            const allBounds = [];
+            
+            allRoutesData.forEach((route, index) => {
+                const color = getRouteColor(index);
+                const trackPoints = route.tracks.flat();
+                
+                if (trackPoints.length > 0) {
+                    const overviewLine = L.polyline(trackPoints, { 
+                        color, 
+                        weight: 4, 
+                        opacity: 0.8,
+                        className: 'route-overview'
+                    });
+                    
+                    overviewLine.bindPopup(`
+                        <div class="text-center">
+                            <strong>${route.name}</strong><br>
+                            <small>${route.waypoints.length} waypoints</small><br>
+                            <button class="btn btn-sm btn-primary mt-2" onclick="loadRouteByFile('${route.file}')">
+                                View Route
+                            </button>
+                        </div>
+                    `);
+                    
+                    overviewLine.addTo(map);
+                    allBounds.push(overviewLine.getBounds());
+                }
+            });
+            
+            if (allBounds.length > 0) {
+                const group = new L.featureGroup(allBounds.map(b => L.rectangle(b)));
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+        
+        function loadRoute(route) {
+            clearMap();
+            hideEditorControls();
+            currentRoute = route;
+            
+            const waypoints = route.waypoints.map(wp => L.latLng(wp[0], wp[1]));
+            
+            // Create routing control for cycling
+            routingControl = L.Routing.control({
+                waypoints: waypoints,
+                routeWhileDragging: true,
+                addWaypoints: false,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1',
+                    profile: 'cycling'
+                }),
+                lineOptions: {
+                    styles: [{ color: '#667eea', weight: 6, opacity: 0.8 }]
+                },
+                createMarker: function(i, waypoint, n) {
+                    const marker = L.marker(waypoint.latLng, {
+                        draggable: true,
+                        icon: L.divIcon({
+                            className: 'waypoint-marker',
+                            html: `<div style="background: #667eea; color: white; width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white;">${i + 1}</div>`,
+                            iconSize: [25, 25]
+                        })
+                    });
+                    
+                    marker.on('dragend', function() {
+                        updateRouteStats();
+                    });
+                    
+                    marker.bindPopup(`
+                        <div class="text-center">
+                            <strong>Waypoint ${i + 1}</strong><br>
+                            ${route.waypoints[i] && route.waypoints[i][2] ? route.waypoints[i][2] : 'Unnamed waypoint'}<br>
+                            <button class="btn btn-sm btn-danger mt-2" onclick="removeWaypoint(${i})">
+                                Remove
+                            </button>
+                        </div>
+                    `);
+                    
+                    waypointMarkers.push(marker);
+                    return marker;
+                }
+            }).addTo(map);
+            
+            routingControl.on('routesfound', function(e) {
+                updateRouteStats();
+                showRouteStats();
+            });
+            
+            showEditorControls();
+            updateWaypointsList();
+        }
+        
+        function startNewRoute() {
+            clearMap();
+            hideEditorControls();
+            hideRouteStats();
+            setActiveRoute(null);
+            
+            currentRoute = {
+                file: null,
+                name: "New Route",
+                waypoints: [],
+                tracks: []
+            };
+            
+            waypointMarkers = [];
+            isAddingWaypoints = true;
+            
+            // Create empty routing control
+            routingControl = L.Routing.control({
+                waypoints: [],
+                routeWhileDragging: true,
+                addWaypoints: false,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1',
+                    profile: 'cycling'
+                }),
+                lineOptions: {
+                    styles: [{ color: '#56ab2f', weight: 6, opacity: 0.8 }]
+                },
+                createMarker: function(i, waypoint, n) {
+                    const marker = L.marker(waypoint.latLng, {
+                        draggable: true,
+                        icon: L.divIcon({
+                            className: 'waypoint-marker',
+                            html: `<div style="background: #56ab2f; color: white; width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white;">${i + 1}</div>`,
+                            iconSize: [25, 25]
+                        })
+                    });
+                    
+                    marker.bindPopup(`
+                        <div class="text-center">
+                            <strong>Waypoint ${i + 1}</strong><br>
+                            <button class="btn btn-sm btn-danger mt-2" onclick="removeWaypoint(${i})">
+                                Remove
+                            </button>
+                        </div>
+                    `);
+                    
+                    waypointMarkers.push(marker);
+                    return marker;
+                }
+            }).addTo(map);
+            
+            // Enable click-to-add waypoints
+            map.on('click', addWaypointOnClick);
+            
+            showEditorControls();
+            document.getElementById('addWaypointBtn').textContent = '🎯 Click map to add waypoints';
+            document.getElementById('addWaypointBtn').classList.add('btn-warning');
+            document.getElementById('addWaypointBtn').classList.remove('btn-primary');
+        }
+        
+        function addWaypointOnClick(e) {
+            if (!isAddingWaypoints) return;
+            
+            const waypoints = routingControl.getWaypoints();
+            waypoints.push(L.latLng(e.latlng.lat, e.latlng.lng));
+            routingControl.setWaypoints(waypoints);
+            
+            updateRouteStats();
+            updateWaypointsList();
+        }
+        
+        function removeWaypoint(index) {
+            const waypoints = routingControl.getWaypoints();
+            waypoints.splice(index, 1);
+            routingControl.setWaypoints(waypoints);
+            
+            updateRouteStats();
+            updateWaypointsList();
+            
+            // Close any open popups
+            map.closePopup();
+        }
+        
+        function optimizeRoute() {
+            if (!routingControl) return;
+            
+            // Simple optimization: reverse every other segment for demonstration
+            const waypoints = routingControl.getWaypoints();
+            if (waypoints.length > 2) {
+                // This is a simple demonstration - in real implementation,
+                // you'd use TSP algorithm or route optimization service
+                alert('Route optimization would be implemented here using TSP algorithms or routing services like Google Maps Optimization API');
+            }
+        }
+        
+        // --- Event Listeners & UI ---
+        function setupEventListeners() {
+            document.getElementById('addNewRouteBtn').addEventListener('click', startNewRoute);
+            document.getElementById('importGpxBtn').addEventListener('click', () => importGpxModal.show());
+            
+            document.getElementById('addWaypointBtn').addEventListener('click', () => {
+                isAddingWaypoints = !isAddingWaypoints;
+                const btn = document.getElementById('addWaypointBtn');
+                if (isAddingWaypoints) {
+                    btn.textContent = '🎯 Click map to add waypoints';
+                    btn.classList.add('btn-warning');
+                    btn.classList.remove('btn-primary');
+                    map.on('click', addWaypointOnClick);
+                } else {
+                    btn.textContent = '📍 Add Waypoint';
+                    btn.classList.remove('btn-warning');
+                    btn.classList.add('btn-primary');
+                    map.off('click', addWaypointOnClick);
+                }
+            });
+            
+            document.getElementById('optimizeRouteBtn').addEventListener('click', optimizeRoute);
+            
+            document.getElementById('confirmSaveRouteBtn').addEventListener('click', () => {
+                const routeName = document.getElementById('routeNameInput').value.trim();
+                const routeType = document.getElementById('routeTypeSelect').value;
+                
+                if (!routeName) {
+                    alert('Please enter a route name.');
+                    return;
+                }
+                
+                saveCurrentRoute(routeName, routeType);
+                saveRouteModal.hide();
+            });
+            
+            document.getElementById('saveChangesBtn').addEventListener('click', () => {
+                if (currentRoute && currentRoute.file) {
+                    saveCurrentRoute(currentRoute.name);
+                } else {
+                    document.getElementById('routeNameInput').value = '';
+                    saveRouteModal.show();
+                }
+            });
+            
+            document.getElementById('cancelEditBtn').addEventListener('click', () => {
+                hideEditorControls();
+                displayAllRoutesOverview();
+                map.off('click', addWaypointOnClick);
+                isAddingWaypoints = false;
+            });
+        }
+        
+        function showEditorControls() {
+            document.getElementById('editor-controls').style.display = 'flex';
+        }
+        
+        function hideEditorControls() {
+            document.getElementById('editor-controls').style.display = 'none';
+            hideRouteStats();
+            document.getElementById('waypoints-list').style.display = 'none';
+        }
+        
+        function showRouteStats() {
+            document.getElementById('routeStats').style.display = 'block';
+        }
+        
+        function hideRouteStats() {
+            document.getElementById('routeStats').style.display = 'none';
+        }
+        
+        function updateRouteStats() {
+            if (!routingControl) return;
+            
+            const waypoints = routingControl.getWaypoints().filter(wp => wp.latLng);
+            document.getElementById('waypointCount').textContent = waypoints.length;
+            
+            // Calculate approximate distance
+            let totalDistance = 0;
+            for (let i = 0; i < waypoints.length - 1; i++) {
+                totalDistance += waypoints[i].latLng.distanceTo(waypoints[i + 1].latLng);
+            }
+            
+            document.getElementById('routeDistance').textContent = `${(totalDistance / 1000).toFixed(1)} km`;
+        }
+        
+        function updateWaypointsList() {
+            const container = document.getElementById('waypoints-container');
+            const waypointsList = document.getElementById('waypoints-list');
+            
+            if (!routingControl) {
+                waypointsList.style.display = 'none';
+                return;
+            }
+            
+            const waypoints = routingControl.getWaypoints().filter(wp => wp.latLng);
+            
+            if (waypoints.length === 0) {
+                waypointsList.style.display = 'none';
+                return;
+            }
+            
+            waypointsList.style.display = 'block';
+            container.innerHTML = '';
+            
+            waypoints.forEach((wp, index) => {
+                const div = document.createElement('div');
+                div.className = 'mb-2 p-2 bg-light rounded';
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><strong>${index + 1}.</strong> ${wp.latLng.lat.toFixed(4)}, ${wp.latLng.lng.toFixed(4)}</span>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeWaypoint(${index})">×</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        function setActiveRoute(activeItem) {
+            document.querySelectorAll('.route-item').forEach(item => item.classList.remove('active'));
+            if (activeItem) activeItem.classList.add('active');
+        }
+        
+        function saveCurrentRoute(routeName, routeType = 'cycling') {
+            if (!routingControl) return;
+            
+            const waypoints = routingControl.getWaypoints()
+                .filter(wp => wp.latLng)
+                .map(wp => [wp.latLng.lat, wp.latLng.lng, `Waypoint`]);
+            
+            if (waypoints.length < 2) {
+                alert("A route needs at least 2 points to be saved.");
+                return;
+            }
+            
+            // In a real implementation, this would send to your Flask API
+            console.log('Saving route:', {
+                name: routeName,
+                type: routeType,
+                waypoints: waypoints
+            });
+            
+            // Simulate successful save
+            alert(`Route "${routeName}" saved successfully!`);
+            
+            // Add to mock data
+            const newRoute = {
+                file: `route_${Date.now()}.gpx`,
+                name: routeName,
+                waypoints: waypoints,
+                tracks: [waypoints.map(wp => [wp[0], wp[1]])]
+            };
+            
+            allRoutesData.push(newRoute);
+            renderRouteList();
+            
+            hideEditorControls();
+            map.off('click', addWaypointOnClick);
+            isAddingWaypoints = false;
+        }
+        
+        // --- Utility Functions ---
+        function clearMap() {
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            
+            waypointMarkers.forEach(marker => map.removeLayer(marker));
+            waypointMarkers = [];
+            
+            map.eachLayer(layer => {
+                if (layer instanceof L.Polyline && layer.options.className === 'route-overview') {
+                    map.removeLayer(layer);
+                }
+            });
+        }
+        
+        function getRouteColor(index) {
+            const colors = ['#667eea', '#56ab2f', '#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3'];
+            return colors[index % colors.length];
+        }
+        
+        // Global function for popup buttons
+        window.loadRouteByFile = function(filename) {
+            const route = allRoutesData.find(r => r.file === filename);
+            if (route) {
+                const routeItem = document.querySelector(`[data-file="${filename}"]`);
+                setActiveRoute(routeItem);
+                loadRoute(route);
+            }
+        };
+        
+        window.removeWaypoint = function(index) {
+            const waypoints = routingControl.getWaypoints();
+            waypoints.splice(index, 1);
+            routingControl.setWaypoints(waypoints);
+            
+            updateRouteStats();
+            updateWaypointsList();
+            
+            // Close any open popups
+            map.closePopup();
+        };
+        
+        // Import GPX functionality (simplified for demo)
+        document.getElementById('confirmImportBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('gpxFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a GPX file.');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+                    
+                    // Parse waypoints
+                    const waypoints = [];
+                    const waypointElements = xmlDoc.getElementsByTagName('wpt');
+                    for (let i = 0; i < waypointElements.length; i++) {
+                        const wpt = waypointElements[i];
+                        const lat = parseFloat(wpt.getAttribute('lat'));
+                        const lon = parseFloat(wpt.getAttribute('lon'));
+                        const name = wpt.getElementsByTagName('name')[0]?.textContent || `Waypoint ${i + 1}`;
+                        waypoints.push([lat, lon, name]);
+                    }
+                    
+                    // Parse track points if no waypoints found
+                    if (waypoints.length === 0) {
+                        const trackPoints = xmlDoc.getElementsByTagName('trkpt');
+                        for (let i = 0; i < Math.min(trackPoints.length, 20); i += Math.floor(trackPoints.length / 20) || 1) {
+                            const trkpt = trackPoints[i];
+                            const lat = parseFloat(trkpt.getAttribute('lat'));
+                            const lon = parseFloat(trkpt.getAttribute('lon'));
+                            waypoints.push([lat, lon, `Point ${waypoints.length + 1}`]);
+                        }
+                    }
+                    
+                    if (waypoints.length > 0) {
+                        const importedRoute = {
+                            file: file.name,
+                            name: file.name.replace('.gpx', ''),
+                            waypoints: waypoints,
+                            tracks: [waypoints.map(wp => [wp[0], wp[1]])]
+                        };
+                        
+                        allRoutesData.push(importedRoute);
+                        renderRouteList();
+                        loadRoute(importedRoute);
+                        
+                        alert(`Successfully imported ${waypoints.length} waypoints from ${file.name}`);
+                    } else {
+                        alert('No valid waypoints or track points found in the GPX file.');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error parsing GPX:', error);
+                    alert('Error parsing GPX file. Please ensure it\'s a valid GPX file.');
+                }
+            };
+            
+            reader.readAsText(file);
+            importGpxModal.hide();
+        });
+        
+        // Add some helpful tooltips and improve UX
+        map.on('locationfound', function(e) {
+            L.marker(e.latlng).addTo(map)
+                .bindPopup('📍 You are here!')
+                .openPopup();
+        });
+        
+        // Add geolocation button
+        const locateButton = L.control({position: 'topright'});
+        locateButton.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+            div.innerHTML = '<button style="background: white; border: none; padding: 5px; cursor: pointer; font-size: 16px;" title="Find my location">📍</button>';
+            div.onclick = function() {
+                map.locate({setView: true, maxZoom: 16});
+            };
+            return div;
+        };
+        locateButton.addTo(map);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 's':
+                        e.preventDefault();
+                        if (document.getElementById('saveChangesBtn').style.display !== 'none') {
+                            document.getElementById('saveChangesBtn').click();
+                        }
+                        break;
+                    case 'n':
+                        e.preventDefault();
+                        document.getElementById('addNewRouteBtn').click();
+                        break;
+                    case 'Escape':
+                        if (document.getElementById('cancelEditBtn').style.display !== 'none') {
+                            document.getElementById('cancelEditBtn').click();
+                        }
+                        break;
+                }
+            }
+        });
+        
+        // Add loading states and better error handling
+        function showLoading(element, message = 'Loading...') {
+            element.innerHTML = `
+                <div class="text-center p-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <div class="mt-2 text-muted">${message}</div>
+                </div>
+            `;
+        }
+        
+        // Initialize with better error handling
+        try {
+            console.log('🚴‍♂️ GPX Route Editor initialized successfully!');
+            console.log('Features available:');
+            console.log('- Drag waypoints to edit routes');
+            console.log('- Routes follow cycling-friendly paths');
+            console.log('- Import/export GPX files');
+            console.log('- Keyboard shortcuts: Ctrl+S (save), Ctrl+N (new route)');
+        } catch (error) {
+            console.error('Error initializing GPX editor:', error);
+        }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="gpx.py -- https://github.com/tkrajina/gpxpy">
+  <wpt lat="51.50579403603809" lon="-0.12912166726962496">
+    <name>Waypoint 1</name>
+  </wpt>
+  <wpt lat="51.519464998729454" lon="-0.14904153999028447">
+    <name>Waypoint 2</name>
+  </wpt>
+  <wpt lat="51.52117358060332" lon="-0.21704386410559054">
+    <name>Waypoint 3</name>
+  </wpt>
+  <wpt lat="51.500239035499625" lon="-0.21086183464056998">
+    <name>Waypoint 4</name>
+  </wpt>
+  <wpt lat="51.50493946464552" lon="-0.12912166726962496">
+    <name>Waypoint 5</name>
+  </wpt>
+  <trk>
+    <trkseg>
+      <trkpt lat="51.50579403603809" lon="-0.12912166726962496">
+      </trkpt>
+      <trkpt lat="51.519464998729454" lon="-0.14904153999028447">
+      </trkpt>
+      <trkpt lat="51.52117358060332" lon="-0.21704386410559054">
+      </trkpt>
+      <trkpt lat="51.500239035499625" lon="-0.21086183464056998">
+      </trkpt>
+      <trkpt lat="51.50493946464552" lon="-0.12912166726962496">
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
